@@ -1,0 +1,79 @@
+---
+title: "Prediction Assignment Writeup"
+author: "mauro"
+date: "Tuesday, November 17, 2015"
+output: html_document
+---
+
+# Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. This project uses data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. Other variables will be used to predict with. The final report describes how model is built, cross validation usage, the expected out of sample error, and the choices did.
+
+# Loading Data
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+```{r}
+#Loading libraries
+  library(caret)
+  library(gbm)
+  library(randomForest)
+#Download the dataset from internet location
+  url_train <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  url_test <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(url_train, destfile="data_train.csv")
+  download.file(url_test, destfile="data_test.csv")
+#Loading data
+  data_train <- read.csv("data_train.csv", na.strings=c("NA", "#DIV/0!"))
+  data_test <- read.csv("data_test.csv", na.strings=c("NA", "#DIV/0!"))
+```
+
+# Prepare Data
+The dataset contains some columns not useful for modeling, like rowid and username.
+The variable with more than 90% of value is considered not significative for the model and is removed.
+```{r}
+dataset_train <- data_train[,colSums(is.na(data_train)) <= (nrow(data_train)*0.9)]
+dataset_train <- dataset_train[,-c(1:7)]
+```
+
+For the model the dataset is prepared with 60% for training the model and 40% for validation. 
+```{r}
+  set.seed(97531)
+  inTrain <- createDataPartition(dataset_train$classe, p=0.60, list=FALSE)
+  trainData <- dataset_train[inTrain, ]
+  validData <- dataset_train[-inTrain, ]
+```
+
+# Modeling
+The dataset has data in group of user (for example the first 165 rows are Carlitos user), so data contains fold.
+For a better cross validation, other than division between train data and validation data, the model is built using resampling and a boosted tree model using gbm package.
+```{r}
+  fitControl <- trainControl(method = "repeatedcv", number = 5, repeats = 5, verbose=FALSE)
+  modelFit <- train(classe ~ ., data=trainData, method="gbm", trControl = fitControl, verbose = FALSE)
+```
+As comparison model a random forest trees were generated for the training dataset using cross-validation.
+```{r}
+  fitControl2 <- trainControl(method="cv", number=5, allowParallel=T, verbose=FALSE)
+  modelFit2 <- train(classe~.,data=trainData, method="rf", trControl=fitControl2, verbose=FALSE)
+```
+
+# Evaluating 
+The model is tested using the validation dataset
+```{r}
+  prediction <- predict(modelFit, newdata=validData)
+  confusionMatrix(prediction, validData$classe)
+```
+it has an accurancy of 0.9624.
+The second model, using random forest
+```{r}
+  prediction2 <- predict(modelFit2, newdata=validData)
+  confusionMatrix(prediction2, validData$classe)
+```
+has an accurancy of 0.9916.
+Better model is the second one that it's chosen as model for our project.
+
+For chosen model the out of sample error, that is the error rate for the new dataset, is the following percentage
+```{r}
+  100 * (1 - sum(prediction2 == validData$classe)/length(prediction2))
+```
+
+# Applying the model
+The model is applyed to the 20 unlabeled assignment cases.
+The results are submitted in course page and not included here.
